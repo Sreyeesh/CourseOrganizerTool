@@ -1,0 +1,3 @@
+base_course_path: "C:/Users/sgari/Documents/UdemyCourses"  # Main path for course folder
+obs_video_path: "C:/Users/sgari/Videos/Videos"             # Path where OBS saves recorded videos
+organized_video_path: "C:/Users/sgari/Documents/UdemyCourses/Organized_Videos"  # Path for organizing videos
