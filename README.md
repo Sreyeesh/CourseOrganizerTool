@@ -1,4 +1,3 @@
-Here’s an updated `README.md` file that outlines the workflow and usage instructions for the course organizer tool. This guide will help users understand the configuration and commands to set up their course folder structure and organize their videos.
 
 ---
 
