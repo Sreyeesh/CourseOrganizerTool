@@ -1,164 +1,108 @@
 import os
-import shutil
 import yaml
 import click
+import pdfplumber
+import re
 from pathlib import Path
-from moviepy.editor import VideoFileClip
 
 def load_config():
     """Load paths and other configurations from config.yaml."""
     with open("config.yaml", "r") as file:
         return yaml.safe_load(file)
 
-def load_course_outline():
-    """Load the course outline from course_outline.yaml."""
-    with open("course_outline.yaml", "r") as file:
-        return yaml.safe_load(file)
-
-def get_video_metadata(file_path):
-    """Extract metadata such as duration and resolution from a video file."""
-    with VideoFileClip(str(file_path)) as clip:  # Convert Path object to string
-        duration = clip.duration  # Duration in seconds
-        resolution = clip.size    # Resolution as [width, height]
-    return {"duration": duration, "resolution": resolution}
-
-def create_course_structure(course_path, sections):
-    """Create folders for each section with titles from course_outline.yaml."""
+def create_main_course_folder(base_course_path, course_name):
+    """Creates the main course folder with hidden .pdf and .metadata subfolders."""
+    course_path = base_course_path / course_name
     course_path.mkdir(parents=True, exist_ok=True)
-    for section_title, lectures in sections.items():
-        section_path = course_path / section_title
+    
+    # Create hidden folders for .pdf and .metadata
+    pdf_folder = course_path / ".pdf"
+    metadata_folder = course_path / ".metadata"
+    pdf_folder.mkdir(exist_ok=True)
+    metadata_folder.mkdir(exist_ok=True)
+    
+    print(f"Created main course folder: {course_path}")
+    print(f"Created hidden .pdf and .metadata folders inside {course_path}")
+    return course_path
+
+def parse_pdf_outline(file_path):
+    """Parse sections from the PDF file and ensure multiple sections are captured."""
+    course_outline = {"sections": {}}
+
+    with pdfplumber.open(file_path) as pdf:
+        # Loop through all pages if necessary
+        for page in pdf.pages:
+            lines = page.extract_text().splitlines()
+
+            # Assume the first line is the course title/acronym
+            course_acronym = lines[0].strip().replace(" ", "_")
+            print(f"Parsed course acronym: {course_acronym}")
+
+            for line in lines[1:]:
+                line = line.strip()
+                
+                # Detect section titles based on "Section" pattern
+                section_match = re.match(r"^Section\s+\d+:\s+(.+)", line)
+                if section_match:
+                    section_title = section_match.group(1).strip()
+                    course_outline["sections"][section_title] = []  # Add each section title with an empty list for lectures
+
+    course_outline["course_acronym"] = course_acronym
+    return course_outline
+
+def simplify_title(title, max_words=5):
+    """Simplify a title by using only the first few words, with a max limit for clarity."""
+    words = title.split()[:max_words]
+    return "_".join(words)
+
+def create_section_folders(course_path, course_outline):
+    """Create a folder for each section title found in the PDF."""
+    sections = course_outline["sections"]
+    
+    for index, section_title in enumerate(sections.keys(), start=1):
+        # Format folder name as "01_Simplified_Title"
+        simplified_title = simplify_title(section_title)
+        section_folder_name = f"{index:02d}_{simplified_title}"
+        section_path = course_path / section_folder_name
         section_path.mkdir(exist_ok=True)
         print(f"Created section folder: {section_path}")
 
-def organize_videos(obs_video_path, course_path, course_outline):
-    """Organize videos by moving and renaming them directly into the course structure."""
-    video_files = sorted(
-        [f for f in os.listdir(obs_video_path) if f.endswith(".mp4")],
-        key=lambda f: os.path.getmtime(os.path.join(obs_video_path, f))
-    )
-    
-    video_index = 0
-    not_enough_videos = False
-    
-    for section_title, lectures in course_outline.items():
-        section_folder = course_path / section_title
-        section_folder.mkdir(parents=True, exist_ok=True)
-
-        for lecture_title in lectures:
-            if video_index < len(video_files):
-                old_video_path = os.path.join(obs_video_path, video_files[video_index])
-                metadata = get_video_metadata(old_video_path)
-                print(f"Metadata for '{video_files[video_index]}': Duration = {metadata['duration']}s, "
-                      f"Resolution = {metadata['resolution'][0]}x{metadata['resolution'][1]}")
-                
-                new_video_filename = f"{lecture_title}.mp4"
-                new_video_path = section_folder / new_video_filename
-                shutil.move(old_video_path, new_video_path)
-                print(f"Moved '{video_files[video_index]}' to '{new_video_path}'")
-                
-                video_index += 1
-            else:
-                not_enough_videos = True
-                break
-
-    if not_enough_videos:
-        print("Warning: Not enough videos to match the course outline.")
-
-def rename_videos(course_path, outline_file="course_outline.yaml"):
-    """Rename videos within the course structure based on their location in the outline."""
-    with open(outline_file, "r") as file:
-        course_outline = yaml.safe_load(file)
-
-    section_titles = course_outline["sections"]
-
-    for section_title, lectures in section_titles.items():
-        section_folder = course_path / section_title
-        videos = sorted([f for f in os.listdir(section_folder) if f.endswith(".mp4")])
-        
-        for video, lecture_title in zip(videos, lectures):
-            new_name = f"{lecture_title}.mp4"
-            old_path = section_folder / video
-            new_path = section_folder / new_name
-            os.rename(old_path, new_path)
-            print(f"Renamed {old_path} to {new_path}")
-
-def extract_metadata_from_organized_videos(course_path):
-    """Extract metadata from videos in the organized course structure."""
-    metadata_report = {}
-    
-    for section_folder in course_path.iterdir():
-        if section_folder.is_dir():
-            section_metadata = {}
-            
-            for video_file in section_folder.glob("*.mp4"):
-                metadata = get_video_metadata(video_file)
-                section_metadata[video_file.name] = metadata
-                
-                print(f"Metadata for '{video_file.name}' in '{section_folder.name}': "
-                      f"Duration = {metadata['duration']}s, Resolution = {metadata['resolution'][0]}x{metadata['resolution'][1]}")
-            
-            metadata_report[section_folder.name] = section_metadata
-
-    # Save the metadata report to a JSON file (optional)
-    with open(course_path / "metadata_report.json", "w") as f:
-        yaml.dump(metadata_report, f, default_flow_style=False)
-    print("Metadata extraction complete. Report saved as 'metadata_report.json'.")
-
 @click.group()
 def cli():
-    """Course Organizer CLI: A tool to create structure, organize, and rename videos."""
+    """Course Organizer CLI: A tool to create main folder, subfolder structure, organize, and update course outline."""
     pass
 
-@cli.command(help="Create course folder structure based on the outline.")
-def create_structure():
-    """Creates the folder structure for the course."""
+@cli.command(name="create-course-folder", help="Create the main course folder with hidden .pdf and .metadata folders.")
+@click.argument("course_name")
+def create_course_folder(course_name):
+    """Creates the main course folder structure."""
     config = load_config()
-    course_outline = load_course_outline()
     base_course_path = Path(config["base_course_path"])
-    course_acronym = course_outline.get("course_acronym", "Default_Course")
-    course_path = base_course_path / course_acronym
-    
-    print(f"\nCreating structure for course at: {course_path}")
-    create_course_structure(course_path, course_outline["sections"])
+    create_main_course_folder(base_course_path, course_name)
 
-@cli.command(help="Organize recorded videos into the course folder structure.")
-def organize_videos_cmd():
-    """Moves and organizes videos based on the course outline."""
+@cli.command(name="create-subfolders-from-pdf", help="Create section folders from the PDF outline.")
+@click.argument("course_name")
+def create_subfolders_from_pdf_cmd(course_name):
+    """Creates section folders based on the PDF content in the .pdf folder of the main course folder."""
     config = load_config()
-    course_outline = load_course_outline()
-    obs_video_path = config["obs_video_path"]
-    
     base_course_path = Path(config["base_course_path"])
-    course_acronym = course_outline.get("course_acronym", "Default_Course")
-    course_path = base_course_path / course_acronym
-    
-    organize_videos(obs_video_path, course_path, course_outline["sections"])
-    print("Video organization complete.")
+    course_path = base_course_path / course_name
 
-@cli.command(help="Rename videos in the course structure based on the outline.")
-def rename_videos_cmd():
-    """Renames videos to follow the course outline convention."""
-    config = load_config()
-    base_course_path = Path(config["base_course_path"])
-    course_outline = load_course_outline()
-    
-    course_acronym = course_outline.get("course_acronym", "Default_Course")
-    course_path = base_course_path / course_acronym
-    
-    rename_videos(course_path)
-    print("Video renaming complete.")
+    if not course_path.exists():
+        print(f"Error: Main course folder '{course_path}' does not exist. Please create it first.")
+        return
 
-@cli.command(help="Extract metadata from videos in the organized course structure.")
-def extract_metadata_cmd():
-    """Extracts and prints metadata for each video in the organized course structure."""
-    config = load_config()
-    base_course_path = Path(config["base_course_path"])
-    course_outline = load_course_outline()
+    pdf_folder = course_path / ".pdf"
+    pdf_files = list(pdf_folder.glob("*.pdf"))
+
+    if not pdf_files:
+        print("Error: No PDF file found in the .pdf folder.")
+        return
+
+    pdf_path = pdf_files[0]
+    course_outline = parse_pdf_outline(pdf_path)
     
-    course_acronym = course_outline.get("course_acronym", "Default_Course")
-    course_path = base_course_path / course_acronym
-    
-    extract_metadata_from_organized_videos(course_path)
+    create_section_folders(course_path, course_outline)
 
 if __name__ == "__main__":
     cli()

@@ -1,23 +1,19 @@
-course_acronym: "PyCLI_Docker"
+course_acronym: Default_Course
 sections:
-  "01_Overview":
-    - "01_Course_Introduction"
-    - "02_Objectives"
-  "02_Project_Structure":
-    - "01_Folder_Setup"
-    - "02_Essential_Files"
-  "03_Docker_Environment":
-    - "01_Docker_Installation"
-    - "02_Writing_Dockerfile"
-    - "03_VS_Code_Setup"
-  "04_CLI_Tool_Development":
-    - "01_Building_CLI_Commands"
-  "05_GitHub_Version_Control":
-    - "01_Setup_and_Commit"
-  "06_Testing_and_Running":
-    - "01_Testing_in_Docker"
-  "07_Deployment":
-    - "01_Setup_Docker_Hub"
-    - "02_Push_Image"
-  "08_Conclusion":
-    - "01_Course_Wrap_Up"
+  Building a Python CLI Tool:
+  - Creating the Python CLI Tool Using Argparse
+  Creating and Managing a GitHub Repository:
+  - Creating a New GitHub Repository with GitHub
+  - Creating and Committing a .gitignore File for Project
+  Deploying the Dockerized CLI Tool to Docker Hub:
+  - Pushing the Docker Image to Docker Hub
+  Dockerizing the Python CLI Tool:
+  - Writing a Dockerfile for Containerizing the Python CLI
+  - Building and Running the Docker Image
+  Introduction and Development Environment Setup:
+  - "Course Overview \u2013 Build a Python CLI Tool with Docker,"
+  - Installing and Setting Up Docker, Visual Studio Code,
+  Setting Up a Dev Container in Visual Studio Code:
+  - Configuring VS Code Dev Containers for Consistent
+  Using GitHub Desktop for Version Control:
+  - Committing Code Changes with GitHub Desktop
