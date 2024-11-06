@@ -19,13 +19,20 @@ def load_config():
         "paths": {
             "recording_directory": "C:\\Users\\sgari\\Videos\\Videos",
             "default_filename": "lecture1.mp4"
-        }
+        },
+        "course_template": ""
     }
 
 # Save configuration to YAML file
 def save_config(config):
     with open(CONFIG_FILE, "w") as file:
         yaml.dump(config, file)
+
+# Show the course template from config
+def show_template():
+    config = load_config()
+    template = config.get("course_template", "Course template not found.")
+    print(template)
 
 # Sanitize names for filenames and folders
 def sanitize_name(name):
@@ -97,7 +104,7 @@ def organize_files_from_recording_directory(provider, category, course_name, sec
 # Main function to handle CLI arguments and execute actions
 def main():
     parser = argparse.ArgumentParser(description="Course Organizer Tool with Dynamic YAML Configuration")
-    parser.add_argument("action", choices=["setup_folders", "organize", "organize_from_recording"], help="Action to perform")
+    parser.add_argument("action", choices=["setup_folders", "organize", "organize_from_recording", "show_template"], help="Action to perform")
     parser.add_argument("--provider", help="Provider name, e.g., 'udemy'", default="udemy")
     parser.add_argument("--category", choices=["Python", "DevOps", "GameDevelopment"], help="Category of the course")
     parser.add_argument("--course_name", help="Name of the course")
@@ -120,6 +127,9 @@ def main():
 
     elif args.action == "organize" and args.category and args.course_name and args.section and args.lecture:
         organize_file(filename, args.provider, args.category, args.course_name, args.section, args.lecture, root_folder, recording_directory)
+    
+    elif args.action == "show_template":
+        show_template()
     
     else:
         print("Invalid command or missing arguments")
