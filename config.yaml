@@ -1,0 +1,17 @@
+# Configuration file for Course Organizer Tool
+
+settings:
+  # Root folder where organized courses will be saved
+  root_folder: "C:\\Users\\sgari\\Documents\\UdemyCourses"
+  
+  # Static list of categories for course organization
+  categories:
+    - "Python"
+    - "DevOps"
+    - "GameDevelopment"
+
+paths:
+  # Path to the directory where video recordings are stored
+  recording_directory: "C:\\Users\\sgari\\Videos\\Videos"
+  # Default filename for organize command if only a filename is specified
+  default_filename: "lecture1.mp4"
