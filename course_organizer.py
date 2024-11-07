@@ -2,6 +2,8 @@ import os
 import yaml
 import click
 from pathlib import Path
+from moviepy.editor import VideoFileClip
+import re
 
 def load_config():
     """Load paths and other configurations from config.yaml."""
@@ -23,23 +25,6 @@ def setup_check():
     print("Setup check completed. Configuration and paths are valid.")
     return True
 
-def get_next_course_name():
-    """Generate the next course name using the prefix and number in the config."""
-    config = load_config()
-    base_course_path = Path(config["base_course_path"])
-    course_prefix = config["course_prefix"]
-    starting_number = config["starting_course_number"]
-    
-    highest_number = starting_number - 1
-    for folder in base_course_path.glob(f"{course_prefix}_*"):
-        try:
-            number = int(folder.name.split("_")[-1])
-            highest_number = max(highest_number, number)
-        except ValueError:
-            continue
-    next_course_number = highest_number + 1
-    return f"{course_prefix}_{str(next_course_number).zfill(3)}"
-
 def create_course_and_section_folders(course_name):
     """Creates the main course folder and section subfolders."""
     config = load_config()
@@ -57,59 +42,38 @@ def create_course_and_section_folders(course_name):
         print(f"Created section folder: {section_folder_path}")
     return course_path
 
-def rename_videos_in_obs():
-    """Rename videos sequentially in the OBS video path."""
+def move_videos_to_course(course_name):
+    """Move renamed videos to the appropriate section folders in the course directory."""
     config = load_config()
     obs_video_path = Path(config["obs_video_path"])
-    lectures_per_section = config["lectures_per_section"]
-    
-    # List and sort videos by modification date
-    video_files = sorted(obs_video_path.glob("*.mp4"), key=lambda f: f.stat().st_mtime)
-    if not video_files:
-        print("No videos found in the OBS video path.")
-        return
-    
-    print("\nFound the following videos:")
-    for video in video_files:
-        print(f" - {video.name}")
-    
-    # Rename each video sequentially as SectionXX_LectureYY
-    section_count = 1
-    lecture_count = 1
-    for video_file in video_files:
-        new_name = f"Section{str(section_count).zfill(2)}_Lecture{str(lecture_count).zfill(2)}.mp4"
-        new_path = obs_video_path / new_name
-        
-        # Rename video
-        video_file.rename(new_path)
-        print(f"Renamed '{video_file.name}' to '{new_name}'")
-        
-        # Update counts
-        lecture_count += 1
-        if lecture_count > lectures_per_section:
-            section_count += 1
-            lecture_count = 1
+    base_course_path = Path(config["base_course_path"])
+    course_path = base_course_path / course_name
 
-def move_videos_to_course(course_path):
-    """Move renamed videos to the correct section folders in the course directory."""
-    config = load_config()
-    obs_video_path = Path(config["obs_video_path"])
-    
-    # Iterate over each video in OBS path
+    # Verify course folder exists
+    if not course_path.exists():
+        print(f"Error: Course folder '{course_path}' does not exist.")
+        return
+
+    # Locate and move each video to the appropriate section folder
     for video_file in obs_video_path.glob("Section*_Lecture*.mp4"):
-        # Determine the section folder based on video name
-        section_folder_name = video_file.stem.split("_")[0]  # e.g., "Section01"
-        section_folder_path = course_path / section_folder_name
-        section_folder_path.mkdir(parents=True, exist_ok=True)
-        
-        # Move the video to the correct section folder
-        new_path = section_folder_path / video_file.name
-        video_file.rename(new_path)
-        print(f"Moved '{video_file.name}' to '{new_path}'")
+        # Extract section number from the filename
+        match = re.match(r"(Section\d{2})_Lecture\d{2}\.mp4", video_file.name)
+        if match:
+            section_folder_name = match.group(1)  # e.g., "Section01"
+            section_folder_path = course_path / section_folder_name
+            
+            # Verify the section folder exists
+            if section_folder_path.exists():
+                # Move the video to the appropriate section folder
+                new_path = section_folder_path / video_file.name
+                video_file.rename(new_path)
+                print(f"Moved '{video_file.name}' to '{new_path}'")
+            else:
+                print(f"Warning: Section folder '{section_folder_path}' does not exist. Skipping '{video_file.name}'.")
 
 @click.group()
 def cli():
-    """Course Organizer CLI: A tool to create course structure, rename videos, and move them."""
+    """Course Organizer CLI: A tool to create course structure, rename, and move videos."""
     pass
 
 @cli.command(name="setup-check")
@@ -126,30 +90,14 @@ def create_course_cmd(course_name):
     course_path = create_course_and_section_folders(course_name)
     print(f"\nCourse '{course_name}' created successfully with section folders.")
 
-@cli.command(name="rename-videos")
-def rename_videos_cmd():
-    """Rename videos in OBS folder in sequential SectionXX_LectureYY format."""
-    if not setup_check():
-        return
-    rename_videos_in_obs()
-    print("\nVideo renaming completed.")
-
 @cli.command(name="move-videos")
 @click.argument("course_name")
 def move_videos_cmd(course_name):
     """Move renamed videos from OBS folder to course section folders."""
     if not setup_check():
         return
-    
-    config = load_config()
-    base_course_path = Path(config["base_course_path"])
-    course_path = base_course_path / course_name
-    if not course_path.exists():
-        print(f"Error: Course folder '{course_name}' does not exist.")
-        return
-    
-    move_videos_to_course(course_path)
-    print("\nVideo moving completed.")
+    move_videos_to_course(course_name)
+    print("\nVideo moving process completed.")
 
 if __name__ == "__main__":
     cli()
