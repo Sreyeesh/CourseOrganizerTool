@@ -1,138 +1,155 @@
 import os
 import yaml
-import argparse
-from datetime import datetime
+import click
+from pathlib import Path
 
-# Configuration file path
-CONFIG_FILE = "config.yaml"
-
-# Load configuration from YAML file
 def load_config():
-    if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, "r") as file:
-            return yaml.safe_load(file)
-    return {
-        "settings": {
-            "root_folder": "C:\\Users\\sgari\\Documents\\UdemyCourses",
-            "categories": ["Python", "DevOps", "GameDevelopment"]
-        },
-        "paths": {
-            "recording_directory": "C:\\Users\\sgari\\Videos\\Videos",
-            "default_filename": "lecture1.mp4"
-        },
-        "course_template": ""
-    }
+    """Load paths and other configurations from config.yaml."""
+    with open("config.yaml", "r") as file:
+        return yaml.safe_load(file)
 
-# Save configuration to YAML file
-def save_config(config):
-    with open(CONFIG_FILE, "w") as file:
-        yaml.dump(config, file)
-
-# Show the course template from config
-def show_template():
+def setup_check():
+    """Check if configuration and necessary paths exist."""
     config = load_config()
-    template = config.get("course_template", "Course template not found.")
-    print(template)
+    base_course_path = Path(config["base_course_path"])
+    obs_video_path = Path(config["obs_video_path"])
+    
+    if not base_course_path.exists():
+        print(f"Error: Base course path {base_course_path} does not exist.")
+        return False
+    if not obs_video_path.exists():
+        print(f"Error: OBS video path {obs_video_path} does not exist.")
+        return False
+    print("Setup check completed. Configuration and paths are valid.")
+    return True
 
-# Sanitize names for filenames and folders
-def sanitize_name(name):
-    return name.replace(" ", "_").lower()
+def get_next_course_name():
+    """Generate the next course name using the prefix and number in the config."""
+    config = load_config()
+    base_course_path = Path(config["base_course_path"])
+    course_prefix = config["course_prefix"]
+    starting_number = config["starting_course_number"]
+    
+    highest_number = starting_number - 1
+    for folder in base_course_path.glob(f"{course_prefix}_*"):
+        try:
+            number = int(folder.name.split("_")[-1])
+            highest_number = max(highest_number, number)
+        except ValueError:
+            continue
+    next_course_number = highest_number + 1
+    return f"{course_prefix}_{str(next_course_number).zfill(3)}"
 
-# Generate standardized filename
-def generate_filename(provider, category, course_name, section, lecture, extension):
-    timestamp = datetime.now().strftime("%m_%d_%Y")
-    return f"{provider}_{sanitize_name(category)}_{sanitize_name(course_name)}_{sanitize_name(section)}_{sanitize_name(lecture)}_{timestamp}{extension}"
+def create_course_and_section_folders(course_name):
+    """Creates the main course folder and section subfolders."""
+    config = load_config()
+    base_course_path = Path(config["base_course_path"])
+    course_path = base_course_path / course_name
+    
+    course_path.mkdir(parents=True, exist_ok=True)
+    print(f"Created main course folder: {course_path}")
+    
+    sections_per_course = config["sections_per_course"]
+    for section_num in range(1, sections_per_course + 1):
+        section_folder_name = f"Section{str(section_num).zfill(2)}"
+        section_folder_path = course_path / section_folder_name
+        section_folder_path.mkdir(exist_ok=True)
+        print(f"Created section folder: {section_folder_path}")
+    return course_path
 
-# Create folder structure based on categories and courses
-def create_folder_structure(root_folder, categories):
-    if not os.path.exists(root_folder):
-        os.mkdir(root_folder)
-    for category in categories:
-        os.makedirs(os.path.join(root_folder, category), exist_ok=True)
-    for status in ["Incomplete", "Completed"]:
-        os.makedirs(os.path.join(root_folder, status), exist_ok=True)
-
-# Organize a single file by renaming and moving it to the correct course/section/lecture folder
-def organize_file(filename, provider, category, course_name, section, lecture, root_folder, recording_directory):
-    filepath = os.path.join(recording_directory, filename)
-    if not os.path.exists(filepath):
-        print(f"File {filepath} does not exist.")
+def rename_videos_in_obs():
+    """Rename videos sequentially in the OBS video path."""
+    config = load_config()
+    obs_video_path = Path(config["obs_video_path"])
+    lectures_per_section = config["lectures_per_section"]
+    
+    # List and sort videos by modification date
+    video_files = sorted(obs_video_path.glob("*.mp4"), key=lambda f: f.stat().st_mtime)
+    if not video_files:
+        print("No videos found in the OBS video path.")
         return
     
-    extension = os.path.splitext(filepath)[1]
-    new_filename = generate_filename(provider, category, course_name, section, lecture, extension)
+    print("\nFound the following videos:")
+    for video in video_files:
+        print(f" - {video.name}")
     
-    # Define target folder structure and ensure folders exist
-    category_folder = os.path.join(root_folder, category)
-    course_folder = os.path.join(category_folder, course_name)
-    section_folder = os.path.join(course_folder, section)
-    os.makedirs(section_folder, exist_ok=True)
+    # Rename each video sequentially as SectionXX_LectureYY
+    section_count = 1
+    lecture_count = 1
+    for video_file in video_files:
+        new_name = f"Section{str(section_count).zfill(2)}_Lecture{str(lecture_count).zfill(2)}.mp4"
+        new_path = obs_video_path / new_name
+        
+        # Rename video
+        video_file.rename(new_path)
+        print(f"Renamed '{video_file.name}' to '{new_name}'")
+        
+        # Update counts
+        lecture_count += 1
+        if lecture_count > lectures_per_section:
+            section_count += 1
+            lecture_count = 1
 
-    # Move and rename the file
-    new_filepath = os.path.join(section_folder, new_filename)
-    os.rename(filepath, new_filepath)
-    print(f"Moved and renamed {filepath} to {new_filepath}")
-
-# Organize all video files from the recording directory based on conventions for multiple courses
-def organize_files_from_recording_directory(provider, category, course_name, section, lecture):
+def move_videos_to_course(course_path):
+    """Move renamed videos to the correct section folders in the course directory."""
     config = load_config()
-    recording_directory = config["paths"]["recording_directory"]
-    root_folder = config["settings"]["root_folder"]
+    obs_video_path = Path(config["obs_video_path"])
+    
+    # Iterate over each video in OBS path
+    for video_file in obs_video_path.glob("Section*_Lecture*.mp4"):
+        # Determine the section folder based on video name
+        section_folder_name = video_file.stem.split("_")[0]  # e.g., "Section01"
+        section_folder_path = course_path / section_folder_name
+        section_folder_path.mkdir(parents=True, exist_ok=True)
+        
+        # Move the video to the correct section folder
+        new_path = section_folder_path / video_file.name
+        video_file.rename(new_path)
+        print(f"Moved '{video_file.name}' to '{new_path}'")
 
-    if not os.path.exists(recording_directory):
-        print(f"Recording directory {recording_directory} does not exist.")
+@click.group()
+def cli():
+    """Course Organizer CLI: A tool to create course structure, rename videos, and move them."""
+    pass
+
+@cli.command(name="setup-check")
+def setup_check_cmd():
+    """Run setup check for paths and configuration."""
+    setup_check()
+
+@cli.command(name="create-course")
+@click.argument("course_name")
+def create_course_cmd(course_name):
+    """Create course folder with section subfolders."""
+    if not setup_check():
         return
+    course_path = create_course_and_section_folders(course_name)
+    print(f"\nCourse '{course_name}' created successfully with section folders.")
 
-    # Process each file in the recording directory
-    for filename in os.listdir(recording_directory):
-        filepath = os.path.join(recording_directory, filename)
-        if os.path.isfile(filepath):
-            extension = os.path.splitext(filepath)[1]
-            new_filename = generate_filename(provider, category, course_name, section, lecture, extension)
+@cli.command(name="rename-videos")
+def rename_videos_cmd():
+    """Rename videos in OBS folder in sequential SectionXX_LectureYY format."""
+    if not setup_check():
+        return
+    rename_videos_in_obs()
+    print("\nVideo renaming completed.")
 
-            # Define target folder structure and ensure folders exist
-            category_folder = os.path.join(root_folder, category)
-            course_folder = os.path.join(category_folder, course_name)
-            section_folder = os.path.join(course_folder, section)
-            os.makedirs(section_folder, exist_ok=True)
-
-            # Move and rename the file
-            new_filepath = os.path.join(section_folder, new_filename)
-            os.rename(filepath, new_filepath)
-            print(f"Moved and renamed {filepath} to {new_filepath}")
-
-# Main function to handle CLI arguments and execute actions
-def main():
-    parser = argparse.ArgumentParser(description="Course Organizer Tool with Dynamic YAML Configuration")
-    parser.add_argument("action", choices=["setup_folders", "organize", "organize_from_recording", "show_template"], help="Action to perform")
-    parser.add_argument("--provider", help="Provider name, e.g., 'udemy'", default="udemy")
-    parser.add_argument("--category", choices=["Python", "DevOps", "GameDevelopment"], help="Category of the course")
-    parser.add_argument("--course_name", help="Name of the course")
-    parser.add_argument("--section", help="Section name or number")
-    parser.add_argument("--lecture", help="Lecture name or number")
-    parser.add_argument("--filename", help="Name of the file to organize (default is set in config.yaml)")
-
-    args = parser.parse_args()
+@cli.command(name="move-videos")
+@click.argument("course_name")
+def move_videos_cmd(course_name):
+    """Move renamed videos from OBS folder to course section folders."""
+    if not setup_check():
+        return
+    
     config = load_config()
-    root_folder = config["settings"]["root_folder"]
-    recording_directory = config["paths"]["recording_directory"]
-    filename = args.filename if args.filename else config["paths"]["default_filename"]
-
-    if args.action == "setup_folders":
-        create_folder_structure(root_folder, config["settings"]["categories"])
-        print("Folder structure created.")
-
-    elif args.action == "organize_from_recording" and args.category and args.course_name and args.section and args.lecture:
-        organize_files_from_recording_directory(args.provider, args.category, args.course_name, args.section, args.lecture)
-
-    elif args.action == "organize" and args.category and args.course_name and args.section and args.lecture:
-        organize_file(filename, args.provider, args.category, args.course_name, args.section, args.lecture, root_folder, recording_directory)
+    base_course_path = Path(config["base_course_path"])
+    course_path = base_course_path / course_name
+    if not course_path.exists():
+        print(f"Error: Course folder '{course_name}' does not exist.")
+        return
     
-    elif args.action == "show_template":
-        show_template()
-    
-    else:
-        print("Invalid command or missing arguments")
+    move_videos_to_course(course_path)
+    print("\nVideo moving completed.")
 
 if __name__ == "__main__":
-    main()
+    cli()

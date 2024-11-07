@@ -1,27 +1,7 @@
-settings:
-  root_folder: "C:\\Users\\sgari\\Documents\\UdemyCourses"
-  categories:
-    - "Python"
-    - "DevOps"
-    - "GameDevelopment"
-
-paths:
-  recording_directory: "C:\\Users\\sgari\\Videos\\Videos"
-  default_filename: "lecture1.mp4"
-
-course_template: |
-  ### Udemy Course Template
-
-  1. **Course Title**: e.g., "Mastering Python for Data Science"
-  2. **Subtitle**: Brief, compelling description.
-  3. **Course Description**: Detailed outline of course goals.
-  4. **Learning Outcomes**: Specific skills students will gain.
-  5. **Course Structure**: Organized by sections and lectures.
-  6. **Video Lectures**: High-quality, engaging, with visuals.
-  7. **Quizzes & Assignments**: For reinforcing concepts.
-  8. **Supplementary Resources**: PDFs, code files, and readings.
-  9. **Course Image**: 750 x 422 pixels, JPEG/PNG.
-  10. **Promotional Video**: 1-2 minute intro video.
-  11. **Final Project**: A hands-on project for portfolio.
-
-  For full details, refer to the course documentation.
+# config.yaml
+base_course_path: "C:/Users/sgari/Documents/UdemyCourses"
+obs_video_path: "C:/Users/sgari/Videos/Videos"
+course_prefix: "TOUCAN_COURSE"
+starting_course_number: 1
+sections_per_course: 10
+lectures_per_section: 5
