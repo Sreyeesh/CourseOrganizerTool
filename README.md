@@ -1,129 +1,99 @@
-# Course Organizer Tool
+---
 
-This tool automates the process of organizing, renaming, and moving videos for a course, creating a structured folder setup and consistent naming convention for course materials.
+# Course Organizer CLI
 
-## Features
+The **Course Organizer CLI** is a Python-based tool designed to help you organize and manage video files for Udemy courses. It includes functionality for calculating the total length of video files, organizing them into structured course folders, and generating metadata files with course information.
 
-1. **Setup Check**: Ensures paths specified in the configuration file are accessible.
-2. **Create Course Folders**: Creates a course folder with numbered section subfolders.
-3. **Rename Videos**: Lists and renames videos in the **videos path** (OBS video folder) to a sequential format (`SectionXX_LectureYY`).
-4. **Move Videos**: Moves the renamed videos into the corresponding section folders in the main course directory.
+---
 
-## Requirements
+## Prerequisites
 
-- Python 3.x
-- `PyYAML` package for YAML configuration:
-  
-  ```bash
-  pip install pyyaml
-  ```
+1. **Python**: Ensure Python is installed (version 3.6 or later).
+2. **moviepy**: Install the `moviepy` library, which is used for calculating video durations.
+   ```bash
+   pip install moviepy
+   ```
+3. **Configuration File**: Make sure you have a `config.yaml` file in the same directory with the following structure:
 
-## Setup Instructions
+   ```yaml
+   # config.yaml
 
-### Step 1: Configure `config.yaml`
+   base_course_path: "C:/Users/sgari/Documents/UdemyCourses"
+   obs_video_path: "C:/Users/sgari/Videos/Videos"
+   course_prefix: "TOUCAN_COURSE"
+   starting_course_number: 1
+   sections_per_course: 7
+   lectures_per_section: 2
+   file_extension: ".mp4"
+   ```
 
-Create a `config.yaml` file in the same directory as the script. Define the following paths and options:
+---
 
-```yaml
-# config.yaml
-base_course_path: "C:/Users/sgari/Documents/UdemyCourses"
-obs_video_path: "C:/Users/sgari/Videos/Videos"
-course_prefix: "TOUCAN_COURSE"
-starting_course_number: 1
-sections_per_course: 10
-lectures_per_section: 5
-```
+## Commands
 
-**Configuration Options**:
-- `base_course_path`: Path where course folders will be created.
-- `obs_video_path`: Path to the folder containing the videos to be organized and renamed.
-- `course_prefix`: Prefix for naming courses.
-- `starting_course_number`: Starting number for course naming (e.g., `TOUCAN_COURSE_001`).
-- `sections_per_course`: Number of sections to create per course.
-- `lectures_per_section`: Number of lectures per section.
+### 1. `calculate-total-video-length`
 
-## Usage
+**Description**:  
+This command calculates and displays the total duration of all videos in each `TOUCAN_COURSE_###` folder located within the `base_course_path`. It also generates a metadata file in each course folder containing the course name and total length of videos.
 
-### 1. Setup Check
-
-Run this command to verify that all paths are configured correctly.
-
+**Usage**:  
 ```bash
-python course_organizer.py setup-check
+python course_organizer.py calculate-total-video-length
 ```
 
-### 2. Create Course Folder and Section Subfolders
+**Output**:
+- For each course folder (`TOUCAN_COURSE_###`), a `{course_name}_metadata.txt` file is generated, containing:
+  - Course Name
+  - Total Length of all videos in `hh:mm:ss` format.
 
-This command creates the main course folder and section subfolders based on the specified course name.
+**Example Output**:
+```plaintext
+TOUCAN_COURSE_001 - Total duration of videos: 2h 30m 45s
+Metadata saved to: C:/Users/sgari/Documents/UdemyCourses/TOUCAN_COURSE_001/TOUCAN_COURSE_001_metadata.txt
+```
 
+### 2. `organize-videos`
+
+**Description**:  
+This command organizes videos from the `obs_video_path` into structured folders under the next available `TOUCAN_COURSE_###` course folder. Videos are renamed to match the format `SectionXX_LectureXX.mp4` and are moved into corresponding section folders like `Section_01`, `Section_02`, etc.
+
+**Usage**:  
 ```bash
-python course_organizer.py create-course "COURSE_NAME"
+python course_organizer.py organize-videos
 ```
 
-Example:
+**How It Works**:
+1. Checks the `base_course_path` for the next available course number (e.g., if `TOUCAN_COURSE_001` and `TOUCAN_COURSE_002` exist, it creates `TOUCAN_COURSE_003`).
+2. Creates section folders (`Section_01`, `Section_02`, etc.) within the course folder.
+3. Renames and moves each video from `obs_video_path` into the appropriate section folder, following the naming convention `SectionXX_LectureXX.mp4`.
 
-```bash
-python course_organizer.py create-course "TOUCAN_COURSE_001"
-```
+**Example**:
+- Before: `C:/Users/sgari/Videos/Videos/video1.mp4`
+- After: `C:/Users/sgari/Documents/UdemyCourses/TOUCAN_COURSE_003/Section_01/Section01_Lecture01.mp4`
 
-### 3. Rename Videos in the Videos Path
+---
 
-This command renames all videos in the specified **videos path** (e.g., `C:\Users\sgari\Videos\Videos`) in sequential order, starting from `Section01_Lecture01`.
+## Additional Information
 
-```bash
-python course_organizer.py rename-videos
-```
-
-### 4. Move Renamed Videos to Course Section Folders
-
-After renaming the videos, use this command to move them into the appropriate section folders in the course directory.
-
-```bash
-python course_organizer.py move-videos "COURSE_NAME"
-```
-
-Example:
-
-```bash
-python course_organizer.py move-videos "TOUCAN_COURSE_001"
-```
+- **Logging**: All actions, including renaming and moving files, are logged in `course_organizer.log`.
+- **Course Naming and Structure**:
+  - Each new course is automatically numbered (e.g., `TOUCAN_COURSE_001`, `TOUCAN_COURSE_002`, etc.) based on existing folders in `base_course_path`.
+  - The `config.yaml` file controls the course structure, including the number of sections and lectures per section.
 
 ---
 
 ## Example Workflow
 
-1. **Run `create-course`**: Creates `TOUCAN_COURSE_001` with sections `Section01` to `Section10` in the specified base path.
-
+1. **Calculate Total Video Length**:
    ```bash
-   python course_organizer.py create-course "TOUCAN_COURSE_001"
+   python course_organizer.py calculate-total-video-length
    ```
 
-2. **Run `rename-videos`**: Renames all videos in the videos path (OBS video folder) to `SectionXX_LectureYY` format based on modification date.
-
+2. **Organize Videos**:
    ```bash
-   python course_organizer.py rename-videos
+   python course_organizer.py organize-videos
    ```
 
-3. **Run `move-videos`**: Moves the renamed videos to their corresponding section folders in `TOUCAN_COURSE_001`.
-
-   ```bash
-   python course_organizer.py move-videos "TOUCAN_COURSE_001"
-   ```
-
-This structured workflow ensures that your course videos are named and organized correctly for easy access and consistent formatting.
-
-## Notes
-
-- Ensure that `config.yaml` is correctly set up before running any commands.
-- The renaming command uses the order of modification date to rename videos sequentially.
-- The script assumes that each section will contain the specified number of lectures (`lectures_per_section` in `config.yaml`). Adjust this if needed.
-
----
-
-## Troubleshooting
-
-- **No Videos Found**: Verify that the videos are in the specified `obs_video_path`.
-- **Path Errors**: Ensure all paths in `config.yaml` are correct and accessible.
-- **Unintended Renaming/Moving**: Run `setup-check` to verify paths, and ensure no conflicting files are present in `obs_video_path`.
+Use these commands to manage and prepare your video files for Udemy courses efficiently.
 
 ---

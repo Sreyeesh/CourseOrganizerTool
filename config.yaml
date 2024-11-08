@@ -1,7 +1,16 @@
 # config.yaml
+
 base_course_path: "C:/Users/sgari/Documents/UdemyCourses"
 obs_video_path: "C:/Users/sgari/Videos/Videos"
 course_prefix: "TOUCAN_COURSE"
 starting_course_number: 1
-sections_per_course: 10
-lectures_per_section: 5
+sections_per_course: 7
+lectures_per_section: 
+  Section01: ["Lecture01", "Lecture02"]
+  Section02: ["Lecture01", "Lecture02"]
+  Section03: ["Lecture01", "Lecture02"]
+  Section04: ["Lecture01", "Lecture02"]
+  Section05: ["Lecture01", "Lecture02"]
+  Section06: ["Lecture01", "Lecture02"]
+  Section07: ["Lecture01"]  # Only one lecture in Section 7
+file_extension: ".mp4"
