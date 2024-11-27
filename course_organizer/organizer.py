@@ -1,33 +1,143 @@
 import os
 import shutil
 import click
-import subprocess
 from tqdm import tqdm
+from datetime import datetime
+import subprocess
 
-# Define paths
+# Default paths
 SOURCE_DIR = r"C:\Users\sgari\Videos\Videos"
 TARGET_DIR = r"C:\Users\sgari\Documents\UdemyCourses"
-PREFIX = "TOUCAN_COURSE_"
+COURSE_PREFIX = "TOUCAN_COURSE_"
 
-# Ensure the target directory exists
-os.makedirs(TARGET_DIR, exist_ok=True)
+@click.group()
+def cli():
+    """CLI Tool for organizing and managing videos."""
+    pass
 
 def get_next_course_number():
-    """Determine the next course number."""
+    """
+    Determine the next available course number based on existing folders.
+    """
     existing_courses = [
-        d for d in os.listdir(TARGET_DIR) if d.startswith(PREFIX)
+        d for d in os.listdir(TARGET_DIR) if d.startswith(COURSE_PREFIX)
     ]
     course_numbers = [
-        int(d.replace(PREFIX, "")) for d in existing_courses if d.replace(PREFIX, "").isdigit()
+        int(d.replace(COURSE_PREFIX, "")) for d in existing_courses if d.replace(COURSE_PREFIX, "").isdigit()
     ]
     return max(course_numbers, default=0) + 1
 
-def count_lectures(section_dir):
-    """Count how many lectures are in a section."""
-    return len([f for f in os.listdir(section_dir) if f.endswith(".mp4")])
+def validate_and_sort_videos(source_dir):
+    """
+    Validate and sort videos by modification time.
+    Returns a sorted list of video file paths.
+    """
+    video_files = [
+        f for f in os.listdir(source_dir) if f.endswith(('.mp4', '.mkv', '.avi'))
+    ]
+    if not video_files:
+        raise ValueError("No video files found in the source directory.")
 
-def get_video_duration_ffmpeg(video_path):
-    """Get the duration of a video using ffmpeg."""
+    # Sort by modification time
+    video_files.sort(key=lambda x: os.path.getmtime(os.path.join(source_dir, x)))
+    return video_files
+
+@cli.command()
+@click.argument("course_name")
+@click.option("--source_dir", default=SOURCE_DIR, help="Directory containing the videos to rename.")
+@click.option("--preview", is_flag=True, help="Preview the renaming and moving process.")
+def organize_videos(course_name, source_dir, preview):
+    """
+    Organize videos into the next available course folder with section subfolders.
+    """
+    try:
+        # Validate and sort video files
+        video_files = validate_and_sort_videos(source_dir)
+        total_videos = len(video_files)
+        required_videos = 7 * 5  # 7 sections x 5 videos each
+
+        if total_videos != required_videos:
+            click.echo(f"Error: Expected exactly {required_videos} videos, but found {total_videos}.")
+            return
+
+        # Determine the next course folder
+        course_number = get_next_course_number()
+        course_folder = f"{COURSE_PREFIX}{course_number:03}"
+        course_path = os.path.join(TARGET_DIR, course_folder)
+        os.makedirs(course_path, exist_ok=True)
+
+        click.echo(f"Organizing {total_videos} videos into {course_folder}...")
+
+        section_number = 1
+        lecture_number = 1
+        organize_preview = []
+
+        for idx, video_file in enumerate(video_files):
+            # Calculate section number (5 videos per section)
+            if lecture_number > 5:
+                section_number += 1
+                lecture_number = 1
+
+            # Generate the section folder
+            section_folder = f"Section_{section_number:02}"
+            section_path = os.path.join(course_path, section_folder)
+            os.makedirs(section_path, exist_ok=True)
+
+            # Generate the new name
+            video_path = os.path.join(source_dir, video_file)
+            timestamp = datetime.fromtimestamp(os.path.getmtime(video_path)).strftime("%Y%m%d_%H%M%S")
+            new_name = f"{course_name}_S{section_number:02}_{timestamp}.mp4"
+            organize_preview.append((video_file, new_name, section_path))
+
+            lecture_number += 1
+
+        if preview:
+            click.echo("Preview of organization:")
+            for original, new, section in organize_preview:
+                click.echo(f"{original} -> {os.path.join(section, new)}")
+            return
+
+        # Perform renaming and moving
+        with tqdm(total=len(organize_preview), desc="Organizing Videos", unit="file") as pbar:
+            for original, new_name, section_path in organize_preview:
+                old_path = os.path.join(source_dir, original)
+                new_path = os.path.join(section_path, new_name)
+                shutil.move(old_path, new_path)
+                pbar.update(1)
+
+        click.echo(f"Videos successfully organized into {course_folder}.")
+    except Exception as e:
+        click.echo(f"Error during organization: {e}")
+
+@cli.command()
+@click.option("--source_dir", default=SOURCE_DIR, help="Directory containing the videos to calculate duration.")
+def calculate_total_length(source_dir):
+    """
+    Calculate the total length of all videos in the source directory using ffprobe.
+    """
+    video_files = [f for f in os.listdir(source_dir) if f.endswith(('.mp4', '.mkv', '.avi'))]
+    if not video_files:
+        click.echo(f"No video files found in {source_dir}.")
+        return
+
+    total_duration = 0
+    click.echo(f"Calculating total duration for {len(video_files)} videos...")
+
+    with tqdm(total=len(video_files), desc="Calculating Duration", unit="video") as pbar:
+        for video in video_files:
+            video_path = os.path.join(source_dir, video)
+            duration = get_video_duration_ffprobe(video_path)
+            total_duration += duration
+            pbar.update(1)
+
+    total_minutes = int(total_duration // 60)
+    total_seconds = int(total_duration % 60)
+    click.echo(f"Total video length: {total_minutes} minutes and {total_seconds} seconds.")
+
+def get_video_duration_ffprobe(video_path):
+    """
+    Get the duration of a video using ffprobe from the ffmpeg package.
+    """
     try:
         result = subprocess.run(
             ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", video_path],
@@ -40,163 +150,6 @@ def get_video_duration_ffmpeg(video_path):
     except Exception as e:
         click.echo(f"Error getting duration for {video_path}: {e}")
         return 0
-
-def create_placeholder_video(output_path, title, duration=10, resolution="1920x1080", color="blue"):
-    """Create a placeholder video using ffmpeg."""
-    try:
-        subprocess.run(
-            [
-                "ffmpeg",
-                "-f", "lavfi",
-                "-i", f"color=c={color}:s={resolution}:d={duration}",
-                "-vf", f"drawtext=text='{title}':fontcolor=white:fontsize=48:x=(w-text_w)/2:y=(h-text_h)/2",
-                "-y",  # Overwrite output file if it exists
-                output_path
-            ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=True
-        )
-    except Exception as e:
-        click.echo(f"Error creating placeholder video {output_path}: {e}")
-
-@click.group()
-def cli():
-    """CLI Tool for organizing Udemy courses."""
-    pass
-
-@cli.command()
-@click.argument("num_videos", type=int)
-@click.option("--duration", default=10, help="Duration of each test video in seconds.")
-def create_test_videos(num_videos, duration):
-    """Create test videos in the source directory."""
-    click.echo(f"Creating {num_videos} test videos in {SOURCE_DIR} with duration {duration}s each.")
-    os.makedirs(SOURCE_DIR, exist_ok=True)
-
-    with tqdm(total=num_videos, desc="Creating Test Videos", unit="video") as pbar:
-        for i in range(1, num_videos + 1):
-            video_title = f"Test_Video_{i:02}"
-            video_path = os.path.join(SOURCE_DIR, f"{video_title}.mp4")
-            create_placeholder_video(video_path, video_title, duration=duration, color="blue")
-            pbar.update(1)
-
-    click.echo(f"Created {num_videos} test videos in {SOURCE_DIR}.")
-
-@cli.command()
-@click.argument("course_number", type=int, required=False)
-def create_course(course_number):
-    """Create a new course directory with 7 sections."""
-    if course_number is None:
-        course_number = get_next_course_number()
-
-    course_dir = os.path.join(TARGET_DIR, f"{PREFIX}{course_number:03}")
-    if not os.path.exists(course_dir):
-        os.makedirs(course_dir, exist_ok=True)
-        for section_number in tqdm(range(1, 8), desc="Creating Sections", unit="section"):
-            section_dir = os.path.join(course_dir, f"Section_{section_number:02}")
-            os.makedirs(section_dir, exist_ok=True)
-        click.echo(f"Created course directory: {course_dir} with 7 sections.")
-    else:
-        click.echo(f"Course directory already exists: {course_dir}")
-
-@cli.command()
-def list_source_videos():
-    """List all videos in the source directory."""
-    video_files = [f for f in os.listdir(SOURCE_DIR) if f.endswith(('.mp4', '.mkv', '.avi'))]
-    if not video_files:
-        click.echo("No video files found in the source directory.")
-    else:
-        click.echo("Videos in source directory:")
-        for video in video_files:
-            click.echo(f"  - {video}")
-
-@cli.command()
-@click.argument("old_name")
-@click.argument("new_name")
-def rename_video_command(old_name, new_name):
-    """Rename a video in the source directory."""
-    old_path = os.path.join(SOURCE_DIR, old_name)
-    if not os.path.exists(old_path):
-        click.echo(f"Video not found: {old_name}")
-        return
-
-    try:
-        new_path = os.path.join(SOURCE_DIR, new_name)
-        os.rename(old_path, new_path)
-        click.echo(f"Renamed video: {old_name} -> {new_name}")
-    except Exception as e:
-        click.echo(f"Error renaming video: {e}")
-
-@cli.command()
-@click.argument("course_number", type=int)
-def move_named_videos(course_number):
-    """Move all named videos from the source directory to the course directory."""
-    course_dir = os.path.join(TARGET_DIR, f"{PREFIX}{course_number:03}")
-    if not os.path.exists(course_dir):
-        click.echo(f"Course directory does not exist: {course_dir}")
-        return
-
-    video_files = [f for f in os.listdir(SOURCE_DIR) if f.endswith(".mp4")]
-    if not video_files:
-        click.echo(f"No videos found in {SOURCE_DIR}.")
-        return
-
-    total_videos = len(video_files)
-    with tqdm(total=total_videos, desc="Moving Videos", unit="video") as pbar:
-        for video in video_files:
-            for section_number in range(1, 8):  # 7 sections
-                section_dir = os.path.join(course_dir, f"Section_{section_number:02}")
-                if not os.path.exists(section_dir):
-                    os.makedirs(section_dir)
-
-                lecture_count = count_lectures(section_dir)
-                if lecture_count < 5:
-                    source_path = os.path.join(SOURCE_DIR, video)
-                    target_path = os.path.join(section_dir, video)
-                    shutil.move(source_path, target_path)
-                    click.echo(f"Moved: {video} -> {section_dir}")
-                    pbar.update(1)
-                    break
-            else:
-                click.echo("All sections are full. Cannot move more videos.")
-                break
-
-@cli.command()
-def calculate_total_length():
-    """Calculate the total length of all videos in the source directory."""
-    video_files = [f for f in os.listdir(SOURCE_DIR) if f.endswith(('.mp4', '.mkv', '.avi'))]
-    if not video_files:
-        click.echo(f"No video files found in {SOURCE_DIR}.")
-        return
-
-    total_duration = 0
-    with tqdm(total=len(video_files), desc="Calculating Duration", unit="video") as pbar:
-        for video in video_files:
-            video_path = os.path.join(SOURCE_DIR, video)
-            total_duration += get_video_duration_ffmpeg(video_path)
-            pbar.update(1)
-
-    total_minutes = total_duration // 60
-    total_seconds = total_duration % 60
-    click.echo(f"Total video length: {int(total_minutes)} minutes and {int(total_seconds)} seconds.")
-
-@cli.command()
-@click.argument("course_number", type=int)
-def list_course(course_number):
-    """List all sections and lectures in a course."""
-    course_dir = os.path.join(TARGET_DIR, f"{PREFIX}{course_number:03}")
-    if not os.path.exists(course_dir):
-        click.echo(f"Course directory does not exist: {course_dir}")
-        return
-
-    for section in os.listdir(course_dir):
-        section_path = os.path.join(course_dir, section)
-        if os.path.isdir(section_path):
-            lecture_count = count_lectures(section_path)
-            click.echo(f"\n{section} (Lectures: {lecture_count}/5):")
-            lectures = os.listdir(section_path)
-            for lecture in sorted(lectures):
-                click.echo(f"  - {lecture}")
 
 if __name__ == "__main__":
     cli()

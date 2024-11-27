@@ -1,274 +1,180 @@
-### README for Course Organizer Tool
+### **Updated README**
 
 ---
 
-# **Course Organizer Tool**
+# **TOUCAN Video Organizer**
 
-A Python-based CLI tool to organize and manage videos for Udemy courses. This tool automates the process of creating course directories, managing video files, and calculating video durations, making it easier to maintain an organized course structure.
+The TOUCAN Video Organizer is a Python CLI tool for organizing videos into structured course folders. It automatically renames and moves videos into section-specific subfolders for easy management and course creation.
 
 ---
 
 ## **Features**
 
-- **Create Courses**: Generate course directories with 7 sections.
-- **Generate Test Videos**: Create placeholder videos for testing purposes.
-- **Move Videos**: Automatically distribute videos into appropriate sections.
-- **Rename Videos**: Rename videos in the source directory for clarity.
-- **List Contents**: View videos in the source directory or within a course.
-- **Calculate Video Length**: Calculate the total duration of videos in the source directory.
+1. **Automatic Course Folder Creation**:
+   - Dynamically assigns videos to the next available course folder (e.g., `TOUCAN_COURSE_005`).
+
+2. **Section Subfolder Organization**:
+   - Automatically creates subfolders (`Section_01`, `Section_02`, etc.) for each course.
+
+3. **Custom Video Renaming**:
+   - Renames videos with a consistent format based on the course name, section, and timestamp.
+
+4. **Video Sorting**:
+   - Ensures videos are processed in chronological order using their modification times.
+
+5. **Duration Calculation**:
+   - Calculates the total length of all videos in the source directory.
+
+6. **Preview Mode**:
+   - Allows you to preview changes before applying them.
+
+---
+
+## **Dependencies**
+
+Ensure you have the following installed:
+- Python 3.6 or later
+- `ffprobe` (part of the `ffmpeg` package) for calculating video duration
+- Python packages:
+  ```bash
+  pip install click tqdm
+  ```
 
 ---
 
 ## **Installation**
 
-### **Prerequisites**
+1. Clone this repository:
+   ```bash
+   git clone https://github.com/yourusername/TOUCAN-Video-Organizer.git
+   cd TOUCAN-Video-Organizer
+   ```
 
-- Python 3.7 or higher
-- `ffmpeg` installed and available in your system's PATH
+2. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-### **Install Requirements**
-Clone or download the repository and navigate to the directory. Then, install the required Python dependencies:
-
-```bash
-pip install -r requirements.txt
-```
-
-Verify `ffmpeg` is installed by running:
-```bash
-ffmpeg -version
-```
+3. Ensure the `ffmpeg` package is installed:
+   - [Download ffmpeg](https://ffmpeg.org/download.html) and add it to your system's PATH.
 
 ---
 
 ## **Usage**
 
-The script provides multiple commands to manage videos and courses. Below are the available commands:
+### **Commands**
 
-### **1. Create a New Course**
-Create a course directory with 7 sections.
+### 1. **Organize Videos**
+Organizes videos into a dynamically determined course folder with section subfolders.
 
+**Command**:
 ```bash
-python organizer.py create-course <course_number>
+python organizer.py organize-videos "CourseName"
 ```
 
-- **Example**:
-  ```bash
-  python organizer.py create-course 1
-  ```
-  Creates a directory named `TOUCAN_COURSE_001` with sections:
-  ```
-  Section_01, Section_02, ..., Section_07
-  ```
+**Example**:
+```bash
+python organizer.py organize-videos "BuildingCLIApp"
+```
 
-- **Auto Increment**:
-  If `<course_number>` is omitted, the next available course number will be assigned:
-  ```bash
-  python organizer.py create-course
+**Result**:
+- Videos in the source directory will be renamed and moved into the next available course folder (e.g., `TOUCAN_COURSE_005`) with subfolders like:
+  ```
+  TOUCAN_COURSE_005
+      ├── Section_01
+      │   ├── BuildingCLIApp_S01_20241126_140621.mp4
+      │   ├── ...
+      ├── Section_02
+      │   ├── BuildingCLIApp_S02_20241126_144558.mp4
+      │   ├── ...
   ```
 
 ---
 
-### **2. Generate Test Videos**
-Generate placeholder test videos in the source directory (`C:\Users\sgari\Videos\Videos`) for testing purposes.
+### 2. **Preview Organization**
+Preview how videos will be renamed and organized before making changes.
 
+**Command**:
 ```bash
-python organizer.py create-test-videos <num_videos> --duration <seconds>
+python organizer.py organize-videos "CourseName" --preview
 ```
-
-- **Example**:
-  ```bash
-  python organizer.py create-test-videos 5 --duration 10
-  ```
-  Creates 5 test videos, each 10 seconds long, with names like:
-  ```
-  Test_Video_01.mp4, Test_Video_02.mp4, ..., Test_Video_05.mp4
-  ```
 
 ---
 
-### **3. List Videos in the Source Directory**
-View the list of videos currently in the source directory.
+### 3. **Calculate Total Video Length**
+Calculates the total duration of all videos in the source directory.
 
-```bash
-python organizer.py list-source-videos
-```
-
-- **Example Output**:
-  ```
-  Videos in source directory:
-    - Test_Video_01.mp4
-    - Test_Video_02.mp4
-  ```
-
----
-
-### **4. Rename a Video**
-Rename a video in the source directory to a more meaningful name.
-
-```bash
-python organizer.py rename-video-command <old_name> <new_name>
-```
-
-- **Example**:
-  ```bash
-  python organizer.py rename-video-command "Test_Video_01.mp4" "Introduction_to_Python.mp4"
-  ```
-
----
-
-### **5. Move Videos to a Course**
-Move named videos from the source directory into the appropriate sections of a course.
-
-```bash
-python organizer.py move-named-videos <course_number>
-```
-
-- **Example**:
-  ```bash
-  python organizer.py move-named-videos 1
-  ```
-  Moves videos to `TOUCAN_COURSE_001`:
-  - Videos are distributed into sections (`Section_01`, `Section_02`, ...) in order.
-  - Each section holds up to 5 videos.
-
----
-
-### **6. List Course Contents**
-View the sections and videos within a specific course.
-
-```bash
-python organizer.py list-course <course_number>
-```
-
-- **Example**:
-  ```bash
-  python organizer.py list-course 1
-  ```
-
-- **Output**:
-  ```
-  Section_01 (Lectures: 5/5):
-    - Lecture_01_Introduction.mp4
-    - Lecture_02_Variables.mp4
-
-  Section_02 (Lectures: 2/5):
-    - Lecture_01_Loops.mp4
-    - Lecture_02_Conditionals.mp4
-  ```
-
----
-
-### **7. Calculate Total Video Duration**
-Calculate the total duration of videos in the source directory.
-
+**Command**:
 ```bash
 python organizer.py calculate-total-length
 ```
 
-- **Example Output**:
-  ```
-  Calculating Duration: 100%|██████████| 5/5 [00:05<00:00,  1.00video/s]
-  Total video length: 50 minutes and 0 seconds.
-  ```
+**Result**:
+- Displays the total duration in minutes and seconds.
 
 ---
 
-## **Requirements**
+### **Directory Structure**
 
-The required dependencies are listed in `requirements.txt`. Install them with:
+Before running the script:
+```
+SOURCE_DIR
+    ├── Video_1.mp4
+    ├── Video_2.mp4
+    ├── ...
+```
+
+After running the script:
+```
+TARGET_DIR
+    ├── TOUCAN_COURSE_005
+    │   ├── Section_01
+    │   │   ├── CourseName_S01_20241126_140621.mp4
+    │   │   ├── ...
+    │   ├── Section_02
+    │   │   ├── CourseName_S02_20241126_144558.mp4
+    │   │   ├── ...
+```
+
+---
+
+## **Examples**
+
+### Organize Videos
 ```bash
-pip install -r requirements.txt
+python organizer.py organize-videos "MyAwesomeCourse"
 ```
 
-**Contents of `requirements.txt`:**
+**Output**:
 ```
-click==8.1.3
-tqdm==4.67.0
+Renaming 35 videos into sections...
+Assigning 'Video_1.mp4' -> Section 01
+Assigning 'Video_2.mp4' -> Section 01
+...
+Moving videos to TOUCAN_COURSE_005...
 ```
 
 ---
 
-## **Command Sequence for Testing**
+## **Development**
 
-Here’s the sequence of commands to test the functionality of the script:
-
-1. **Generate Test Videos**:
+### **Extending the Script**
+To add additional features or modify the existing logic:
+1. Open the `organizer.py` file.
+2. Modify the relevant functions or commands.
+3. Test changes using the preview mode:
    ```bash
-   python organizer.py create-test-videos 5 --duration 10
-   ```
-
-2. **List Videos in Source Directory**:
-   ```bash
-   python organizer.py list-source-videos
-   ```
-
-3. **Rename a Video**:
-   ```bash
-   python organizer.py rename-video-command "Test_Video_01.mp4" "Introduction_to_Python.mp4"
-   ```
-
-4. **Create a New Course**:
-   ```bash
-   python organizer.py create-course 1
-   ```
-
-5. **Move Videos into the Course**:
-   ```bash
-   python organizer.py move-named-videos 1
-   ```
-
-6. **List the Course Contents**:
-   ```bash
-   python organizer.py list-course 1
-   ```
-
-7. **Calculate Total Video Duration**:
-   ```bash
-   python organizer.py calculate-total-length
+   python organizer.py organize-videos "YourCourse" --preview
    ```
 
 ---
 
-## **Example Workflow**
+## **Contributing**
 
-Here’s how you can use the script step-by-step:
-
-1. Generate 10 test videos in the source directory:
-   ```bash
-   python organizer.py create-test-videos 10 --duration 15
-   ```
-
-2. Check the source directory for the generated videos:
-   ```bash
-   python organizer.py list-source-videos
-   ```
-
-3. Rename one of the videos:
-   ```bash
-   python organizer.py rename-video-command "Test_Video_01.mp4" "Introduction_to_Python.mp4"
-   ```
-
-4. Create a new course:
-   ```bash
-   python organizer.py create-course 2
-   ```
-
-5. Move videos to the new course:
-   ```bash
-   python organizer.py move-named-videos 2
-   ```
-
-6. Check the course contents:
-   ```bash
-   python organizer.py list-course 2
-   ```
+Contributions are welcome! Please open an issue or submit a pull request with suggested changes.
 
 ---
 
 ## **License**
 
-This tool is provided under the MIT License.
-
---- 
-
-Let me know if you need further changes or additional details! 😊
+This project is licensed under the MIT License. See the LICENSE file for details.
