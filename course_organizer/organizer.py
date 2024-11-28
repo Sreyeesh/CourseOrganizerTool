@@ -1,155 +1,246 @@
 import os
-import shutil
-import click
-from tqdm import tqdm
-from datetime import datetime
 import subprocess
+import click
+import shutil
 
-# Default paths
+# Define paths
 SOURCE_DIR = r"C:\Users\sgari\Videos\Videos"
 TARGET_DIR = r"C:\Users\sgari\Documents\UdemyCourses"
-COURSE_PREFIX = "TOUCAN_COURSE_"
+PREFIX = "TOUCAN_COURSE_"
 
-@click.group()
-def cli():
-    """CLI Tool for organizing and managing videos."""
-    pass
+# Helper function: Get folder size
+def get_folder_size(folder_path):
+    """Calculate the total size of a folder."""
+    total_size = 0
+    for dirpath, dirnames, filenames in os.walk(folder_path):
+        for f in filenames:
+            fp = os.path.join(dirpath, f)
+            total_size += os.path.getsize(fp)
+    return total_size
 
-def get_next_course_number():
-    """
-    Determine the next available course number based on existing folders.
-    """
-    existing_courses = [
-        d for d in os.listdir(TARGET_DIR) if d.startswith(COURSE_PREFIX)
-    ]
-    course_numbers = [
-        int(d.replace(COURSE_PREFIX, "")) for d in existing_courses if d.replace(COURSE_PREFIX, "").isdigit()
-    ]
-    return max(course_numbers, default=0) + 1
-
-def validate_and_sort_videos(source_dir):
-    """
-    Validate and sort videos by modification time.
-    Returns a sorted list of video file paths.
-    """
-    video_files = [
-        f for f in os.listdir(source_dir) if f.endswith(('.mp4', '.mkv', '.avi'))
-    ]
-    if not video_files:
-        raise ValueError("No video files found in the source directory.")
-
-    # Sort by modification time
-    video_files.sort(key=lambda x: os.path.getmtime(os.path.join(source_dir, x)))
-    return video_files
-
-@cli.command()
-@click.argument("course_name")
-@click.option("--source_dir", default=SOURCE_DIR, help="Directory containing the videos to rename.")
-@click.option("--preview", is_flag=True, help="Preview the renaming and moving process.")
-def organize_videos(course_name, source_dir, preview):
-    """
-    Organize videos into the next available course folder with section subfolders.
-    """
-    try:
-        # Validate and sort video files
-        video_files = validate_and_sort_videos(source_dir)
-        total_videos = len(video_files)
-        required_videos = 7 * 5  # 7 sections x 5 videos each
-
-        if total_videos != required_videos:
-            click.echo(f"Error: Expected exactly {required_videos} videos, but found {total_videos}.")
-            return
-
-        # Determine the next course folder
-        course_number = get_next_course_number()
-        course_folder = f"{COURSE_PREFIX}{course_number:03}"
-        course_path = os.path.join(TARGET_DIR, course_folder)
-        os.makedirs(course_path, exist_ok=True)
-
-        click.echo(f"Organizing {total_videos} videos into {course_folder}...")
-
-        section_number = 1
-        lecture_number = 1
-        organize_preview = []
-
-        for idx, video_file in enumerate(video_files):
-            # Calculate section number (5 videos per section)
-            if lecture_number > 5:
-                section_number += 1
-                lecture_number = 1
-
-            # Generate the section folder
-            section_folder = f"Section_{section_number:02}"
-            section_path = os.path.join(course_path, section_folder)
-            os.makedirs(section_path, exist_ok=True)
-
-            # Generate the new name
-            video_path = os.path.join(source_dir, video_file)
-            timestamp = datetime.fromtimestamp(os.path.getmtime(video_path)).strftime("%Y%m%d_%H%M%S")
-            new_name = f"{course_name}_S{section_number:02}_{timestamp}.mp4"
-            organize_preview.append((video_file, new_name, section_path))
-
-            lecture_number += 1
-
-        if preview:
-            click.echo("Preview of organization:")
-            for original, new, section in organize_preview:
-                click.echo(f"{original} -> {os.path.join(section, new)}")
-            return
-
-        # Perform renaming and moving
-        with tqdm(total=len(organize_preview), desc="Organizing Videos", unit="file") as pbar:
-            for original, new_name, section_path in organize_preview:
-                old_path = os.path.join(source_dir, original)
-                new_path = os.path.join(section_path, new_name)
-                shutil.move(old_path, new_path)
-                pbar.update(1)
-
-        click.echo(f"Videos successfully organized into {course_folder}.")
-    except Exception as e:
-        click.echo(f"Error during organization: {e}")
-
-@cli.command()
-@click.option("--source_dir", default=SOURCE_DIR, help="Directory containing the videos to calculate duration.")
-def calculate_total_length(source_dir):
-    """
-    Calculate the total length of all videos in the source directory using ffprobe.
-    """
-    video_files = [f for f in os.listdir(source_dir) if f.endswith(('.mp4', '.mkv', '.avi'))]
-    if not video_files:
-        click.echo(f"No video files found in {source_dir}.")
-        return
-
-    total_duration = 0
-    click.echo(f"Calculating total duration for {len(video_files)} videos...")
-
-    with tqdm(total=len(video_files), desc="Calculating Duration", unit="video") as pbar:
-        for video in video_files:
-            video_path = os.path.join(source_dir, video)
-            duration = get_video_duration_ffprobe(video_path)
-            total_duration += duration
-            pbar.update(1)
-
-    total_minutes = int(total_duration // 60)
-    total_seconds = int(total_duration % 60)
-    click.echo(f"Total video length: {total_minutes} minutes and {total_seconds} seconds.")
-
-def get_video_duration_ffprobe(video_path):
-    """
-    Get the duration of a video using ffprobe from the ffmpeg package.
-    """
+# Helper function: Get video duration using ffmpeg
+def get_video_duration(video_path):
+    """Get the duration of a video using ffprobe."""
     try:
         result = subprocess.run(
-            ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", video_path],
+            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+             "-of", "default=noprint_wrappers=1:nokey=1", video_path],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
             check=True
         )
         return float(result.stdout.strip())
-    except Exception as e:
-        click.echo(f"Error getting duration for {video_path}: {e}")
+    except Exception:
         return 0
+
+@click.group()
+def cli():
+    """CLI Tool for managing videos and courses."""
+    pass
+
+@cli.command()
+@click.argument("course_name")
+@click.option("--source_dir", default=SOURCE_DIR, help="Directory containing the videos to rename.")
+def qa_watch_and_rename(course_name, source_dir):
+    """
+    Quickly preview videos in the source directory, then rename them interactively.
+    :param course_name: Name of the course.
+    :param source_dir: Directory containing the videos.
+    """
+    try:
+        # Detect video files
+        video_files = sorted(
+            [f for f in os.listdir(source_dir) if f.endswith(('.mp4', '.mkv', '.avi'))]
+        )
+        if not video_files:
+            click.echo("No video files found in the source directory.")
+            return
+
+        click.echo(f"Total videos detected: {len(video_files)}\n")
+        click.echo("You will quickly preview each video and rename it interactively.\n")
+
+        for video_file in video_files:
+            # Display the current file name
+            click.echo(f"Current file: {video_file}")
+            old_path = os.path.join(source_dir, video_file)
+
+            # Open the video file in the default player
+            click.echo("Opening video for quick preview...")
+            subprocess.run(["start", old_path], shell=True, check=False)
+
+            # Ask the user for a new name
+            new_name = click.prompt("Enter the new name (without extension)", type=str)
+            if not new_name.strip():
+                click.echo("Skipping renaming for this file.\n")
+                continue
+
+            # Generate the new file name
+            new_path = os.path.join(source_dir, f"{course_name}_{new_name.strip().replace(' ', '_')}.mp4")
+
+            # Rename the file
+            os.rename(old_path, new_path)
+            click.echo(f"Renamed: {video_file} -> {os.path.basename(new_path)}\n")
+
+        click.echo("Quick QA and renaming completed.")
+    except Exception as e:
+        click.echo(f"Error during QA and renaming: {e}")
+
+@cli.command()
+def list_courses():
+    """List all existing TOUCAN course folders in the target directory."""
+    try:
+        existing_courses = [
+            d for d in os.listdir(TARGET_DIR)
+            if os.path.isdir(os.path.join(TARGET_DIR, d)) and d.startswith(PREFIX)
+        ]
+        if not existing_courses:
+            click.echo("No TOUCAN course folders found in the target directory.")
+            return
+
+        click.echo("Existing TOUCAN course folders:")
+        for course in sorted(existing_courses):
+            course_path = os.path.join(TARGET_DIR, course)
+            size_mb = get_folder_size(course_path) / (1024 * 1024)  # Convert size to MB
+            click.echo(f"  - {course} ({size_mb:.2f} MB)")
+    except Exception as e:
+        click.echo(f"Error listing courses: {e}")
+
+@cli.command()
+@click.argument("course_number", type=int)
+def show_course_details(course_number):
+    """Show detailed information about a specific course."""
+    try:
+        course_folder = os.path.join(TARGET_DIR, f"{PREFIX}{course_number:03}")
+        if not os.path.exists(course_folder):
+            click.echo(f"Course folder does not exist: {course_folder}")
+            return
+
+        click.echo(f"Details for {PREFIX}{course_number:03}:\n")
+        total_videos = 0
+        total_duration = 0
+
+        for section in sorted(os.listdir(course_folder)):
+            section_path = os.path.join(course_folder, section)
+            if os.path.isdir(section_path):
+                click.echo(f"  {section}:")
+                section_videos = [
+                    f for f in os.listdir(section_path) if f.endswith(('.mp4', '.mkv', '.avi'))
+                ]
+                total_videos += len(section_videos)
+
+                for video in section_videos:
+                    video_path = os.path.join(section_path, video)
+                    size_mb = os.path.getsize(video_path) / (1024 * 1024)  # Size in MB
+                    duration = get_video_duration(video_path)
+                    total_duration += duration
+
+                    click.echo(f"    - {video}")
+                    click.echo(f"      Size: {size_mb:.2f} MB, Duration: {duration / 60:.2f} minutes")
+
+        total_duration_minutes = total_duration / 60
+        click.echo("\nSummary:")
+        click.echo(f"  Total Videos: {total_videos}")
+        click.echo(f"  Total Duration: {total_duration_minutes:.2f} minutes")
+    except Exception as e:
+        click.echo(f"Error showing course details: {e}")
+
+@cli.command()
+@click.argument("course_number", type=int)
+@click.option("--lectures_per_section", default=5, help="Number of lectures per section.")
+def move_videos_to_course(course_number, lectures_per_section):
+    """
+    Move videos from SOURCE_DIR to a specific course folder and organize them into sections.
+    :param course_number: Course number to move videos into.
+    :param lectures_per_section: Maximum number of lectures per section.
+    """
+    try:
+        # Define the course folder path
+        course_folder = os.path.join(TARGET_DIR, f"{PREFIX}{course_number:03}")
+        if not os.path.exists(course_folder):
+            click.echo(f"Course folder does not exist: {course_folder}")
+            return
+
+        # Detect video files in the source directory
+        video_files = [
+            f for f in os.listdir(SOURCE_DIR) if f.endswith(('.mp4', '.mkv', '.avi'))
+        ]
+        if not video_files:
+            click.echo("No videos found in the source directory.")
+            return
+
+        click.echo(f"Moving {len(video_files)} videos to {course_folder}...")
+
+        # Initialize counters for sections and lectures
+        section_number = 1
+        lecture_number = 1
+
+        # Create the first section folder if it doesn't exist
+        section_folder = os.path.join(course_folder, f"Section_{section_number:02}")
+        os.makedirs(section_folder, exist_ok=True)
+
+        # Move and organize videos
+        for video in video_files:
+            old_path = os.path.join(SOURCE_DIR, video)
+            new_name = f"Lecture_{lecture_number:02}_{video}"
+            new_path = os.path.join(section_folder, new_name)
+
+            shutil.move(old_path, new_path)
+            click.echo(f"Moved: {video} -> {new_path}")
+
+            lecture_number += 1
+            if lecture_number > lectures_per_section:
+                # Create a new section folder when the lecture limit is reached
+                section_number += 1
+                lecture_number = 1
+                section_folder = os.path.join(course_folder, f"Section_{section_number:02}")
+                os.makedirs(section_folder, exist_ok=True)
+
+        click.echo("All videos have been moved and organized into sections.")
+    except Exception as e:
+        click.echo(f"Error moving videos: {e}")
+
+@cli.command()
+def calculate_total_duration():
+    """Calculate the total duration of all videos in the source directory."""
+    try:
+        video_files = [
+            os.path.join(SOURCE_DIR, f) for f in os.listdir(SOURCE_DIR)
+            if f.endswith(('.mp4', '.mkv', '.avi'))
+        ]
+        if not video_files:
+            click.echo("No videos found in the source directory.")
+            return
+
+        total_duration = 0
+        for video in video_files:
+            total_duration += get_video_duration(video)
+
+        total_duration_minutes = total_duration / 60
+        click.echo(f"Total video duration in source directory: {total_duration_minutes:.2f} minutes")
+    except Exception as e:
+        click.echo(f"Error calculating total duration: {e}")
+
+@cli.command()
+def list_source_videos():
+    """List all videos in the source directory with their sizes and durations."""
+    try:
+        video_files = [
+            f for f in os.listdir(SOURCE_DIR) if f.endswith(('.mp4', '.mkv', '.avi'))
+        ]
+        if not video_files:
+            click.echo("No videos found in the source directory.")
+            return
+
+        click.echo("Videos in source directory:")
+        for video in video_files:
+            video_path = os.path.join(SOURCE_DIR, video)
+            size_mb = os.path.getsize(video_path) / (1024 * 1024)  # Size in MB
+            duration = get_video_duration(video_path)
+            click.echo(f"  - {video}")
+            click.echo(f"    Size: {size_mb:.2f} MB, Duration: {duration / 60:.2f} minutes")
+    except Exception as e:
+        click.echo(f"Error listing source videos: {e}")
 
 if __name__ == "__main__":
     cli()
