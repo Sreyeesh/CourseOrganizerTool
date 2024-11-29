@@ -1,26 +1,25 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="course-organizer",
+    name="course-organizer-cli",
     version="1.0.0",
+    description="A CLI tool for managing videos and course organization.",
+    long_description=open("README.md").read(),
+    long_description_content_type="text/markdown",
     author="Sreyeesh Garimella",
-    author_email="sgarime1@gmail.com",
-    description="A CLI tool to organize Udemy courses and videos",
-    packages=find_packages(),
+    packages=find_packages(),  # Automatically finds all packages, including `course_organizer`
     install_requires=[
-        "click",
-        "tqdm"
+        "click",  # Add other dependencies here
     ],
-   entry_points={
-    "console_scripts": [
-        "course-organizer=course_organizer.organizer:cli",
-    ],
-},
-
+    entry_points={
+        "console_scripts": [
+            "organizer=course_organizer.organizer:cli",  # Entry point for the CLI tool
+        ],
+    },
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
-    python_requires=">=3.7",
+    python_requires=">=3.6",
 )
