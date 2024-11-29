@@ -178,9 +178,3 @@ Feel free to submit issues or pull requests to enhance the tool’s functionalit
 
 ---
 
-## **Support**
-For any issues, contact **Sreyeesh Garimella**.
-
----
-
-Let me know if you need further adjustments or additional sections! 😊
